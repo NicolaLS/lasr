@@ -329,6 +329,15 @@ in Blip and Rayl’s Blink experience.
   behavior for any prerelease app unless explicitly requested.
 - Never commit or log wallet credentials, NWC URIs, API keys, signing material,
   payment preimages, or other sensitive wallet data.
+- Rayl and Blip's iOS encryption declarations are assessed in
+  `distribution/encryption.md`. Any added, removed, or updated direct/transitive
+  iOS library (including changed bytes under a SNAPSHOT version), cryptographic
+  behavior, native framework export, or distribution territory requires updating
+  that evidence and reassessing each affected app's `Info.plist` in the same
+  change. If its Boolean stays the same, refresh its assessment revision comment.
+  Do not infer an exemption from a hidden feature or set the flag merely to
+  suppress App Store Connect questions. The current assessment excludes France;
+  resolve its documented declaration/exemption work before enabling that territory.
 
 ## Implementation style
 

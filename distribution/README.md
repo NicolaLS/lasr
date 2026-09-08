@@ -13,5 +13,12 @@ must depict the current native UI; do not reuse retired multi-wallet screens.
 Rayl's distribution identifier is `com.nicolasusca.rayl`. Public privacy policies
 and terms live under [`docs/legal`](../docs/legal).
 
+[`encryption.md`](encryption.md) records the Rayl and Blip iOS encryption
+assessment, dependency evidence, and matching `Info.plist` declarations. The
+current assessment excludes France from initial distribution; enabling France
+requires resolving the documented declaration or exemption work first. Update
+the assessment and both affected plist declarations when dependencies,
+cryptographic behavior, or distribution territories change.
+
 `app-signing-certificate.sha256` is a build/distribution input verified by the APK
 tooling. Changes to signing identity require explicit owner review.
