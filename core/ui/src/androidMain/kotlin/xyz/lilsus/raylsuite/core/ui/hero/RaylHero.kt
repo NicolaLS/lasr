@@ -52,7 +52,11 @@ fun RaylHero(
     )
 
     LaunchedEffect(phase) {
-        animationState.animatePhase(phase, color)
+        animationState.animatePhase(phase)
+    }
+
+    LaunchedEffect(color) {
+        animationState.animateColor(color)
     }
 
     BoxWithConstraints(modifier = modifier) {
