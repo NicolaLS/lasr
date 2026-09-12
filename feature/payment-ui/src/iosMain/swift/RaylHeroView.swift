@@ -41,7 +41,7 @@ struct RaylHeroView: View {
                 elapsed: elapsed,
                 from: fromFrame
             )
-            fromTint = tint(for: previous, elapsed: elapsed)
+            fromTint = tint(toward: targetTint(for: previous), elapsed: elapsed)
             phaseStart = Date()
         }
     }
@@ -50,22 +50,36 @@ struct RaylHeroView: View {
     /// `Canvas` clips to its bounds where Compose's does not, so sizing it to the drawing itself
     /// would cut the corner arcs off as they rotate.
     private var animation: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, size in
-                let side = min(size.width * heroGeometry.canvasWidthFraction, size.height)
-                let elapsed = timeline.date.timeIntervalSince(phaseStart)
-                let frame = heroFrame(
-                    phase: HeroPhase(phase),
-                    elapsed: elapsed,
-                    from: fromFrame
+        // Resolve the shared palette when the phase or environment changes, not on every tick.
+        let target = targetTint(for: phase)
+        let background = Color(uiColor: .systemBackground)
+        return TimelineView(.animation) { timeline in
+            // Capture one complete frame during the view update. The drawing callback should
+            // consume values, not read live SwiftUI state when Canvas chooses to redraw.
+            let elapsed = timeline.date.timeIntervalSince(phaseStart)
+            let frame = heroFrame(
+                phase: HeroPhase(phase),
+                elapsed: elapsed,
+                from: fromFrame
+            )
+            let frameTint = tint(toward: target, elapsed: elapsed)
+
+            Canvas(opaque: true) { context, size in
+                // Both Scan and Recent use this background. Painting the entire surface keeps
+                // its extent independent of the moving paths and avoids transparent compositing.
+                // An opaque Canvas must fill its bounds before drawing any translucent bits.
+                context.fill(
+                    Path(CGRect(origin: .zero, size: size)),
+                    with: .color(background)
                 )
+                let side = min(size.width * heroGeometry.canvasWidthFraction, size.height)
                 context.translateBy(
                     x: (size.width - side) / 2,
                     y: (size.height - side) / 2
                 )
-                draw(
+                Self.draw(
                     frame,
-                    tint: tint(for: phase, elapsed: elapsed),
+                    tint: frameTint,
                     in: &context,
                     side: side
                 )
@@ -73,15 +87,18 @@ struct RaylHeroView: View {
         }
     }
 
-    /// Phase colours cross-fade over half a second rather than snapping, matching the original.
-    private func tint(for phaseValue: String, elapsed: Double) -> HeroTint {
+    private func targetTint(for phaseValue: String) -> HeroTint {
         let palette = NativeHeroPaletteKt.nativeHeroPalette(phaseValue: phaseValue)
-        let target = HeroTint(argb: colorScheme == .dark ? palette.darkArgb : palette.lightArgb)
+        return HeroTint(argb: colorScheme == .dark ? palette.darkArgb : palette.lightArgb)
+    }
+
+    /// Phase colours cross-fade over half a second rather than snapping, matching the original.
+    private func tint(toward target: HeroTint, elapsed: Double) -> HeroTint {
         guard let fromTint else { return target }
         return HeroTint.blend(fromTint, target, easeInOutCubic(elapsed / 0.5))
     }
 
-    private func draw(
+    private static func draw(
         _ frame: HeroFrame,
         tint heroTint: HeroTint,
         in context: inout GraphicsContext,
@@ -90,56 +107,56 @@ struct RaylHeroView: View {
         let center = CGPoint(x: side / 2, y: side / 2)
         let tint = heroTint.color
 
-        context.drawLayer { cluster in
-            cluster.translateBy(x: center.x, y: center.y)
-            cluster.scaleBy(x: frame.clusterScale, y: frame.clusterScale)
-            cluster.translateBy(x: -center.x, y: -center.y)
-            cluster.translateBy(x: frame.shakeX, y: 0)
+        // Context copies isolate transforms without allocating nested transparency layers.
+        // These paths need no group effects; draw them directly into the same Canvas layer.
+        var cluster = context
+        cluster.translateBy(x: center.x, y: center.y)
+        cluster.scaleBy(x: frame.clusterScale, y: frame.clusterScale)
+        cluster.translateBy(x: -center.x, y: -center.y)
+        cluster.translateBy(x: frame.shakeX, y: 0)
 
-            for (index, spec) in heroGeometry.squares.enumerated() {
-                drawSquare(spec, index: index, frame: frame, in: &cluster, side: side, tint: tint)
-            }
-
-            if frame.boltScale > 0 {
-                drawBolt(frame, in: &cluster, side: side, center: center, tint: tint)
-            }
+        for (index, spec) in heroGeometry.squares.enumerated() {
+            drawSquare(spec, index: index, frame: frame, in: &cluster, side: side, tint: tint)
         }
 
-        context.drawLayer { ring in
-            ring.translateBy(x: center.x, y: center.y)
-            ring.rotate(by: .degrees(frame.rotation))
-            ring.translateBy(x: -center.x, y: -center.y)
+        if frame.boltScale > 0 {
+            drawBolt(frame, in: &cluster, side: side, center: center, tint: tint)
+        }
 
-            for (index, spec) in heroGeometry.arcs.enumerated() {
-                let offset = frame.arcOffsets[index]
-                let length = side * spec.cornerLength
-                let rect = CGRect(
-                    x: (spec.x + offset.width) * side,
-                    y: (spec.y + offset.height) * side,
-                    width: length,
-                    height: length
+        var ring = context
+        ring.translateBy(x: center.x, y: center.y)
+        ring.rotate(by: .degrees(frame.rotation))
+        ring.translateBy(x: -center.x, y: -center.y)
+
+        for (index, spec) in heroGeometry.arcs.enumerated() {
+            let offset = frame.arcOffsets[index]
+            let length = side * spec.cornerLength
+            let rect = CGRect(
+                x: (spec.x + offset.width) * side,
+                y: (spec.y + offset.height) * side,
+                width: length,
+                height: length
+            )
+            // Trimming the inscribed ellipse gives the same corner bracket as Compose's
+            // `drawArc`, without depending on how `addArc` interprets sweep direction in a
+            // flipped coordinate space. The ellipse path starts at 0° and runs clockwise, so
+            // the angles map straight onto trim fractions.
+            let path = Path(ellipseIn: rect).trimmedPath(
+                from: spec.startAngle / 360,
+                to: (spec.startAngle + spec.sweepAngle) / 360
+            )
+            ring.stroke(
+                path,
+                with: .color(tint),
+                style: StrokeStyle(
+                    lineWidth: side * heroGeometry.arcStrokeWidthFraction,
+                    lineCap: .round
                 )
-                // Trimming the inscribed ellipse gives the same corner bracket as Compose's
-                // `drawArc`, without depending on how `addArc` interprets sweep direction in a
-                // flipped coordinate space. The ellipse path starts at 0° and runs clockwise, so
-                // the angles map straight onto trim fractions.
-                let path = Path(ellipseIn: rect).trimmedPath(
-                    from: spec.startAngle / 360,
-                    to: (spec.startAngle + spec.sweepAngle) / 360
-                )
-                ring.stroke(
-                    path,
-                    with: .color(tint),
-                    style: StrokeStyle(
-                        lineWidth: side * heroGeometry.arcStrokeWidthFraction,
-                        lineCap: .round
-                    )
-                )
-            }
+            )
         }
     }
 
-    private func drawSquare(
+    private static func drawSquare(
         _ spec: HeroSquareSpec,
         index: Int,
         frame: HeroFrame,
@@ -155,66 +172,65 @@ struct RaylHeroView: View {
         let scale = frame.squareScales[index]
         guard scale > 0 else { return }
 
-        context.drawLayer { square in
-            square.translateBy(x: squareCenter.x, y: squareCenter.y)
-            square.scaleBy(x: scale, y: scale)
-            square.translateBy(x: -squareCenter.x, y: -squareCenter.y)
+        var square = context
+        square.translateBy(x: squareCenter.x, y: squareCenter.y)
+        square.scaleBy(x: scale, y: scale)
+        square.translateBy(x: -squareCenter.x, y: -squareCenter.y)
 
-            if spec.outlined {
-                let rect = CGRect(x: originX, y: originY, width: size, height: size)
-                square.stroke(
-                    Path(
-                        roundedRect: rect,
-                        cornerSize: CGSize(
-                            width: size * heroGeometry.squareCornerRadiusFraction,
-                            height: size * heroGeometry.squareCornerRadiusFraction
-                        )
-                    ),
-                    with: .color(tint),
-                    lineWidth: size * heroGeometry.squareStrokeWidthFraction
-                )
-                let child = size * heroGeometry.finderInnerSizeFraction
-                let childRect = CGRect(
-                    x: originX + (size - child) / 2,
-                    y: originY + (size - child) / 2,
-                    width: child,
-                    height: child
-                )
-                square.fill(
-                    Path(
-                        roundedRect: childRect,
-                        cornerSize: CGSize(
-                            width: child * heroGeometry.finderInnerCornerRadiusFraction,
-                            height: child * heroGeometry.finderInnerCornerRadiusFraction
-                        )
-                    ),
-                    with: .color(tint)
-                )
-            } else {
-                let gap = size * heroGeometry.dataBitGapFraction
-                let mini = (size - gap) / 2
-                let corner = CGSize(
-                    width: mini * heroGeometry.dataBitCornerRadiusFraction,
-                    height: mini * heroGeometry.dataBitCornerRadiusFraction
-                )
-                let origins = [
-                    CGPoint(x: originX, y: originY),
-                    CGPoint(x: originX + mini + gap, y: originY),
-                    CGPoint(x: originX, y: originY + mini + gap),
-                    CGPoint(x: originX + mini + gap, y: originY + mini + gap)
-                ]
-                for (bit, point) in origins.enumerated() {
-                    let rect = CGRect(x: point.x, y: point.y, width: mini, height: mini)
-                    square.fill(
-                        Path(roundedRect: rect, cornerSize: corner),
-                        with: .color(tint.opacity(frame.bitOpacities[bit]))
+        if spec.outlined {
+            let rect = CGRect(x: originX, y: originY, width: size, height: size)
+            square.stroke(
+                Path(
+                    roundedRect: rect,
+                    cornerSize: CGSize(
+                        width: size * heroGeometry.squareCornerRadiusFraction,
+                        height: size * heroGeometry.squareCornerRadiusFraction
                     )
-                }
+                ),
+                with: .color(tint),
+                lineWidth: size * heroGeometry.squareStrokeWidthFraction
+            )
+            let child = size * heroGeometry.finderInnerSizeFraction
+            let childRect = CGRect(
+                x: originX + (size - child) / 2,
+                y: originY + (size - child) / 2,
+                width: child,
+                height: child
+            )
+            square.fill(
+                Path(
+                    roundedRect: childRect,
+                    cornerSize: CGSize(
+                        width: child * heroGeometry.finderInnerCornerRadiusFraction,
+                        height: child * heroGeometry.finderInnerCornerRadiusFraction
+                    )
+                ),
+                with: .color(tint)
+            )
+        } else {
+            let gap = size * heroGeometry.dataBitGapFraction
+            let mini = (size - gap) / 2
+            let corner = CGSize(
+                width: mini * heroGeometry.dataBitCornerRadiusFraction,
+                height: mini * heroGeometry.dataBitCornerRadiusFraction
+            )
+            let origins = [
+                CGPoint(x: originX, y: originY),
+                CGPoint(x: originX + mini + gap, y: originY),
+                CGPoint(x: originX, y: originY + mini + gap),
+                CGPoint(x: originX + mini + gap, y: originY + mini + gap)
+            ]
+            for (bit, point) in origins.enumerated() {
+                let rect = CGRect(x: point.x, y: point.y, width: mini, height: mini)
+                square.fill(
+                    Path(roundedRect: rect, cornerSize: corner),
+                    with: .color(tint.opacity(frame.bitOpacities[bit]))
+                )
             }
         }
     }
 
-    private func drawBolt(
+    private static func drawBolt(
         _ frame: HeroFrame,
         in context: inout GraphicsContext,
         side: CGFloat,
@@ -233,13 +249,12 @@ struct RaylHeroView: View {
         let bounds = path.boundingRect
         let pathCenter = CGPoint(x: bounds.midX, y: bounds.midY)
 
-        context.drawLayer { layer in
-            layer.translateBy(x: center.x - pathCenter.x, y: center.y - pathCenter.y)
-            layer.translateBy(x: pathCenter.x, y: pathCenter.y)
-            layer.scaleBy(x: frame.boltScale, y: frame.boltScale)
-            layer.translateBy(x: -pathCenter.x, y: -pathCenter.y)
-            layer.fill(path, with: .color(tint))
-        }
+        var layer = context
+        layer.translateBy(x: center.x - pathCenter.x, y: center.y - pathCenter.y)
+        layer.translateBy(x: pathCenter.x, y: pathCenter.y)
+        layer.scaleBy(x: frame.boltScale, y: frame.boltScale)
+        layer.translateBy(x: -pathCenter.x, y: -pathCenter.y)
+        layer.fill(path, with: .color(tint))
     }
 }
 
