@@ -65,9 +65,6 @@ private let flintShellAdapter = NativeShellAdapter(
 struct ContentView: View {
     var body: some View {
         NativeAppShell(adapter: flintShellAdapter)
-            .background(NativeAppPrivacyProtection(appName: "Flint") {
-                flintIosApp.privacyCaptureMessage()
-            })
     }
 }
 

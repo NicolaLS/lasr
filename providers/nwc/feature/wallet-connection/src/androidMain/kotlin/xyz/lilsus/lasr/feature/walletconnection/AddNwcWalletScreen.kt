@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import xyz.lilsus.lasr.feature.walletconnection.R
 import xyz.lilsus.raylsuite.core.camera.CameraAuthorizationState
 import xyz.lilsus.raylsuite.core.ui.components.BackIconButton
-import xyz.lilsus.raylsuite.core.ui.privacy.SecureWindow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,7 +51,6 @@ fun AddNwcWalletScreen(
     canRequestCameraPermission: Boolean,
     modifier: Modifier = Modifier
 ) {
-    SecureWindow()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val focusManager = LocalFocusManager.current
     val submitOrClearFocus = {
