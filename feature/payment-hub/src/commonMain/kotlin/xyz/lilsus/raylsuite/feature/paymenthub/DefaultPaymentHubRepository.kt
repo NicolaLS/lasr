@@ -46,12 +46,12 @@ class DefaultPaymentHubRepository(
             if (id != null && current.widget(id) == null) return@mutate current
             val contacts = draft.contactIds.distinct()
             val local = LocalHubWidgets.definitions.firstOrNull { it.id == draft.definitionId }
-            if (!draft.kind.isRemote &&
+            if (draft.kind != HubWidgetKind.Metric &&
                 (local == null || local.kind != draft.kind || draft.variant !in local.variants)
             ) {
                 return@mutate current
             }
-            if (draft.kind.isRemote &&
+            if (draft.kind == HubWidgetKind.Metric &&
                 (
                     draft.definitionId.startsWith("local.") || draft.definitionId.isBlank() ||
                         draft.variant.columns !in 1..2 || draft.variant.rows !in 1..2
@@ -110,7 +110,9 @@ class DefaultPaymentHubRepository(
                 title = draft.title?.trim()?.takeIf(String::isNotEmpty),
                 contactIds = if (draft.kind == HubWidgetKind.Contacts) contacts else emptyList(),
                 targetId = targetId,
-                configuration = if (draft.kind.isRemote) {
+                configuration = if (draft.kind ==
+                    HubWidgetKind.Metric
+                ) {
                     draft.configuration
                 } else {
                     emptyMap()
@@ -275,8 +277,7 @@ private data class WidgetRecord(
     val title: String? = null,
     val contactIds: List<String> = emptyList(),
     val actionId: String? = null,
-    val configuration: Map<String, String> = emptyMap(),
-    val template: String? = null
+    val configuration: Map<String, String> = emptyMap()
 )
 
 private fun PaymentHub.toRecord() = HubRecord(
@@ -298,8 +299,7 @@ private fun PaymentHub.toRecord() = HubRecord(
         WidgetRecord(
             widget.id, widget.definitionId, widget.kind.name,
             widget.variant.id, widget.variant.columns, widget.variant.rows, widget.variant.capacity,
-            widget.title, widget.contactIds, widget.targetId?.value,
-            widget.configuration, widget.variant.template
+            widget.title, widget.contactIds, widget.targetId?.value, widget.configuration
         )
     }
 )
@@ -338,13 +338,7 @@ private fun HubRecord.toHub() = PaymentHub(
             record.id,
             record.definitionId,
             kind,
-            HubWidgetVariant(
-                record.variantId,
-                record.columns,
-                record.rows,
-                record.capacity,
-                template = record.template
-            ),
+            HubWidgetVariant(record.variantId, record.columns, record.rows, record.capacity),
             record.title,
             record.contactIds,
             record.actionId?.let(::HubItemId),

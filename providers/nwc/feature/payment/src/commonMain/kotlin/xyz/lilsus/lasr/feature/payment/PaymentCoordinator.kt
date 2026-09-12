@@ -145,11 +145,6 @@ private class LasrPaymentFlow(
 
     init {
         scope.launch {
-            paymentHub.serviceInvoiceRequests.collect { invoice ->
-                dispatch(PaymentIntent.DeepLinkReceived("lightning:$invoice"))
-            }
-        }
-        scope.launch {
             paymentPreferences.preferences.collectLatest { preferences ->
                 runtimePreferences =
                     PaymentRuntimePreferences(

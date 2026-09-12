@@ -1,6 +1,6 @@
 # Rayl and Blip iOS encryption assessment
 
-Assessment revision: **2026-09-08 / MOB-59**.
+Assessment revision: **2026-09-12 / MOB-48** (original assessment: MOB-59).
 
 This maintained record explains the App Store Connect answers and the matching
 `Info.plist` declarations for Rayl and Blip 1.0. It covers app code, linked iOS
@@ -63,12 +63,24 @@ do not change factual answers to bypass the request.
 
 ## Assessed source and dependency graph
 
-Source baselines inspected before adding these declarations:
+Historical source baselines inspected before adding these declarations (commit IDs remain valid after branch retirement):
 
 | Branch | Commit |
 | --- | --- |
 | `release/rayl/1.0` | `a62f88f4878219a6c565e36305885684970454a5` |
 | `release/blip/1.0` | `c571b9134e141a5c0f88bbe50bcdb1070a9e0959` |
+
+The 12 September consolidation restores the local-only source from Rayl's final
+1.0 branch tip `3ce2873` onto `main`. The Claro service purchase/recovery code,
+its Hub credential-store initialization, and its additional feature dependency
+edges are removed. The retained core/provider dependency definitions, iOS
+Keychain implementation, and Rayl/Blip framework exports match the originally
+assessed local-only scope. No dependency version, cryptographic library, or
+territory is intentionally changed. Hub networking remains source-disabled,
+including external URL overrides. This does not remove or change the bundled
+ACINQ/NWC cryptography listed below. Both plist Booleans remain `false` under the
+same France-excluded scope; their revision comments are refreshed. Historical
+binary evidence below remains historical, not a new candidate assessment.
 
 Relevant core/provider dependency definitions agree between these release tips.
 The `iosArm64CompileKlibraries` reports resolved on the assessment date show:

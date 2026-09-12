@@ -90,14 +90,6 @@ internal fun HubWidgetCanvas(
                 Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.hub_widget_add))
             }
         }
-        if (state.hasServiceOrder) {
-            OutlinedButton(
-                onClick = viewModel::openPendingServiceOrder,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                Text(stringResource(R.string.hub_service_order_banner))
-            }
-        }
         state.error?.let { error ->
             Text(
                 error.label(state.selectedVariant?.capacity ?: 1),
@@ -295,8 +287,7 @@ private fun WidgetCanvasTile(
             tile,
             onPay = viewModel::pay,
             modifier = Modifier.fillMaxSize(),
-            interactive = !arranging,
-            onOpenService = { offerId -> viewModel.openService(tile.id, offerId) }
+            interactive = !arranging
         )
         if (arranging) {
             Surface(

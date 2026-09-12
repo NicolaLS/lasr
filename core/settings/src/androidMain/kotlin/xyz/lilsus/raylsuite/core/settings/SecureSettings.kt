@@ -1,13 +1,14 @@
 package xyz.lilsus.raylsuite.core.settings
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.SharedPreferencesSettings
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -19,44 +20,39 @@ fun rememberSecureSettings(storageName: String): SecureStringStore {
     require(storageName.isNotBlank()) { "Secure storage name cannot be blank" }
     val context = LocalContext.current.applicationContext
     return remember(context, storageName) {
-        createSecureSettings(context, storageName)
+        val preferences =
+            SharedPreferencesSettings(
+                context.getSharedPreferences(
+                    "${storageName}_encrypted",
+                    Context.MODE_PRIVATE
+                )
+            )
+        EncryptedStringSettings(
+            delegate = preferences,
+            keyAlias = "xyz.lilsus.raylsuite.$storageName"
+        )
     }
-}
-
-/** Plain factory for non-Compose feature lifecycles. */
-fun createSecureSettings(context: Context, storageName: String): SecureStringStore {
-    require(storageName.isNotBlank()) { "Secure storage name cannot be blank" }
-    val preferences = context.applicationContext.getSharedPreferences(
-        "${storageName}_encrypted",
-        Context.MODE_PRIVATE
-    )
-    return EncryptedStringSettings(
-        delegate = preferences,
-        keyAlias = "xyz.lilsus.raylsuite.$storageName"
-    )
 }
 
 private class EncryptedStringSettings(
-    private val delegate: SharedPreferences,
+    private val delegate: Settings,
     private val keyAlias: String
 ) : SecureStringStore {
     override fun putString(key: String, value: String) {
-        check(delegate.edit().putString(key, encrypt(value, keyAlias)).commit()) {
-            "Could not persist secure value"
-        }
+        delegate.putString(key, encrypt(value, keyAlias))
     }
 
     override fun getStringOrNull(key: String): String? {
-        val encrypted = delegate.getString(key, null) ?: return null
-        return decrypt(encrypted, keyAlias)
+        val encrypted = delegate.getStringOrNull(key) ?: return null
+        return runCatching { decrypt(encrypted, keyAlias) }.getOrNull()
     }
 
     override fun remove(key: String) {
-        check(delegate.edit().remove(key).commit()) { "Could not remove secure value" }
+        delegate.remove(key)
     }
 
     override fun clear() {
-        check(delegate.edit().clear().commit()) { "Could not clear secure storage" }
+        delegate.clear()
     }
 }
 
