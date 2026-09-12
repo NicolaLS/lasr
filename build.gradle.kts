@@ -25,7 +25,6 @@ val appProjectNames = setOf("blip", "flint", "lasr", "rayl")
 val nativeLocalizationLocales = listOf("en", "de", "es")
 val androidOnlyLocalizationModules = setOf("feature/theme-settings")
 val appleOnlyLocalizationModules = emptySet<String>()
-val appleOnlyLocalizationKeys = mapOf("core/ui" to setOf("privacy_capture_message"))
 
 data class NativeLocalizationEntry(val kind: String, val variants: Map<String, String>)
 
@@ -445,15 +444,9 @@ val verifyNativeLocalizations = tasks.register("verifyNativeLocalizations") {
             nativeLocalizationLocales.forEach { locale ->
                 val androidEntries = androidByLocale.getValue(locale)
                 val appleEntries = appleByLocale.getValue(locale)
-                val appleOnlyKeys = appleOnlyLocalizationKeys[moduleName].orEmpty()
-                appleOnlyKeys.forEach { key ->
-                    if (key !in appleEntries || key in androidEntries) {
-                        violations += "$moduleName/$locale/$key must exist only in Apple resources"
-                    }
-                }
-                if (androidEntries.keys != appleEntries.keys - appleOnlyKeys) {
+                if (androidEntries.keys != appleEntries.keys) {
                     val missingFromApple = androidEntries.keys - appleEntries.keys
-                    val missingFromAndroid = appleEntries.keys - androidEntries.keys - appleOnlyKeys
+                    val missingFromAndroid = appleEntries.keys - androidEntries.keys
                     if (missingFromApple.isNotEmpty()) {
                         violations +=
                             "$moduleName/$locale missing from Apple: " +
