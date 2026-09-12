@@ -39,9 +39,6 @@ struct ContentView: View {
                 } message: { Text(snapshot.message ?? "") }
             } else { ProgressView() }
         }
-        .background(NativeAppPrivacyProtection(appName: "Rayl") {
-            RaylIosApp.shared.privacyCaptureMessage()
-        })
     }
 
     private func colorScheme(_ value: String) -> ColorScheme? {

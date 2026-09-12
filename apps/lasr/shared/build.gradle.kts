@@ -16,7 +16,6 @@ kotlin {
     }
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":core:ui"))
             implementation(project(":core:model"))
             api(project(":providers:nwc:experience"))
             api(project(":feature:payment-hub"))
