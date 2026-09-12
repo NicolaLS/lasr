@@ -128,7 +128,6 @@ class FlintNativeOnboardingController internal constructor(
     }
 
     fun continueAutoPay() {
-        onboarding.persistAutoPaySettings()
         moveTo(STEP_AGREEMENT)
     }
 

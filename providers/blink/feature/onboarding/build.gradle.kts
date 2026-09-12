@@ -1,6 +1,5 @@
 plugins {
     id("xyz.lilsus.raylsuite.kmp.compose")
-    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -13,20 +12,16 @@ kotlin {
             implementation(libs.compose.runtime)
         }
         androidMain.dependencies {
-            implementation(project(":providers:blink:feature:blink-contacts"))
             implementation(project(":providers:blink:feature:wallet-connection"))
-            implementation(project(":providers:blink:integration:blink"))
-            implementation(project(":core:camera"))
+            api(project(":providers:blink:integration:blink"))
             implementation(project(":core:ui"))
-            api(project(":feature:payment-hub"))
-            implementation(project(":feature:onboarding"))
+            api(project(":feature:onboarding"))
+            implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.compose.material3)
             implementation(libs.compose.runtime)
             implementation(libs.compose.ui)
             implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.kotlinx.serialization.json)
-            implementation(libs.navigation.compose)
         }
         iosMain.dependencies {
             implementation(project(":core:ui"))

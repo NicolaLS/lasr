@@ -57,6 +57,7 @@ import xyz.lilsus.raylsuite.core.ui.components.BackIconButton
 fun AddBlinkWalletScreen(
     state: AddBlinkWalletUiState,
     onBack: (() -> Unit)?,
+    onShowInstructions: () -> Unit,
     onApiKeyChange: (String) -> Unit,
     onPaste: () -> Unit,
     onSubmit: () -> Unit,
@@ -107,6 +108,10 @@ fun AddBlinkWalletScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            TextButton(onClick = onShowInstructions, enabled = !state.isSaving) {
+                Text(stringResource(R.string.add_blink_wallet_instructions))
+            }
 
             Column {
                 Text(

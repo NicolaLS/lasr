@@ -21,8 +21,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import kotlin.random.Random
-import xyz.lilsus.blip.feature.onboarding.BlipOnboardingDestination
-import xyz.lilsus.blip.feature.onboarding.blipOnboarding
+import xyz.lilsus.blip.feature.onboarding.BlinkOnboardingStep
+import xyz.lilsus.blip.feature.onboarding.BlipOnboarding
 import xyz.lilsus.raylsuite.core.model.ThemePreference
 import xyz.lilsus.raylsuite.core.settings.rememberAppSettings
 import xyz.lilsus.raylsuite.core.settings.rememberSecureSettings
@@ -77,22 +77,9 @@ fun BlinkExperience(
     }
     val connected by runtime.blinkWallet.connection.collectAsStateWithLifecycle()
     LaunchedEffect(runtime, connected) { onConnectionChanged(connected != null) }
-    val connectionOnly = remember(runtime) { runtime.onboardingCompleted }
+    val onboardingStep by runtime.onboardingState.step.collectAsStateWithLifecycle()
+    val destination = onboardingStep.destination(connected != null)
     val navController = rememberNavController()
-    val startDestination =
-        remember(runtime) {
-            if (runtime.blinkWallet.connection.value == null) {
-                if (connectionOnly) {
-                    BlipOnboardingDestination.AddWallet
-                } else if (configuration.welcomeCompleted) {
-                    BlipOnboardingDestination.Features
-                } else {
-                    BlipOnboardingDestination.Welcome
-                }
-            } else {
-                BlipDestination.Home
-            }
-        }
 
     CompositionLocalProvider(
         LocalProductName provides configuration.appName
@@ -117,33 +104,35 @@ fun BlinkExperience(
                         }
                     }) { Text(stringResource(android.R.string.cancel)) }
                 }
-                NavHost(
-                    navController = navController,
-                    startDestination = startDestination,
-                    modifier = Modifier
-                ) {
-                    blipOnboarding(
-                        navController = navController,
+                if (destination != BlinkOnboardingStep.Complete) {
+                    BlipOnboarding(
+                        step = destination,
                         blinkWallet = runtime.blinkWallet,
                         onboardingViewModel = runtime.onboardingViewModel,
-                        connectionOnly = connectionOnly,
                         privacyPolicyUrl = configuration.legalLinks.privacyPolicyUrl,
                         termsUrl = configuration.legalLinks.termsUrl,
-                        onFinished = {
-                            runtime.completeOnboarding()
-                            navController.navigate(BlipDestination.Home) {
-                                popUpTo(navController.graph.id) { inclusive = true }
-                                launchSingleTop = true
+                        onStepChanged = runtime.onboardingState::moveTo,
+                        onBackToWelcome = if (!configuration.welcomeCompleted &&
+                            onboardingStep == BlinkOnboardingStep.Connect
+                        ) {
+                            { runtime.onboardingState.moveTo(BlinkOnboardingStep.Welcome) }
+                        } else {
+                            null
+                        }
+                    )
+                } else {
+                    NavHost(
+                        navController = navController,
+                        startDestination = BlipDestination.Home
+                    ) {
+                        blipHome(
+                            runtime = runtime,
+                            performanceDiagnostics = performanceDiagnostics,
+                            onRemoveWallet = {
+                                runtime.removeWallet()
                             }
-                        }
-                    )
-                    blipHome(
-                        runtime = runtime,
-                        performanceDiagnostics = performanceDiagnostics,
-                        onRemoveWallet = {
-                            runtime.removeWallet()
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }

@@ -304,10 +304,12 @@ struct NativeOnboardingProgressLayout<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 28) {
-            ProgressView(
-                value: Double(stepIndex + 1),
-                total: Double(stepCount)
-            )
+            if stepCount > 0 {
+                ProgressView(
+                    value: Double(stepIndex + 1),
+                    total: Double(stepCount)
+                )
+            }
             content()
         }
         .padding(.horizontal, 24)

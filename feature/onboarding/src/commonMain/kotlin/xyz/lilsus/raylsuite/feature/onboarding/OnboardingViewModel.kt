@@ -34,7 +34,7 @@ class OnboardingViewModel(
     private val paymentPreferences: PaymentPreferencesRepository,
     currencyPreferences: CurrencyPreferences,
     private val bitcoinPriceProvider: BitcoinPriceProvider? = null,
-    dispatcher: CoroutineDispatcher = Dispatchers.Main
+    dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private var selectedCurrency = CurrencyCatalog.infoFor(CurrencyCatalog.DEFAULT_CODE)
@@ -45,6 +45,17 @@ class OnboardingViewModel(
     val uiState: StateFlow<OnboardingUiState> = mutableUiState.asStateFlow()
 
     init {
+        scope.launch {
+            paymentPreferences.preferences.collect { preferences ->
+                mutableUiState.update {
+                    it.copy(
+                        confirmationMode = preferences.confirmationMode,
+                        thresholdSats = preferences.thresholdSats
+                    )
+                }
+                publishThresholdPreview()
+            }
+        }
         scope.launch {
             currencyPreferences.code.collectLatest(::updateSelectedCurrency)
         }
@@ -57,7 +68,7 @@ class OnboardingViewModel(
     }
 
     fun setConfirmationMode(mode: PaymentConfirmationMode) {
-        mutableUiState.update { it.copy(confirmationMode = mode) }
+        scope.launch { paymentPreferences.setConfirmationMode(mode) }
     }
 
     fun setThreshold(thresholdSats: Long) {
@@ -66,17 +77,8 @@ class OnboardingViewModel(
                 PaymentPreferences.MIN_CONFIRMATION_THRESHOLD_SATS,
                 PaymentPreferences.MAX_CONFIRMATION_THRESHOLD_SATS
             )
-        mutableUiState.update {
-            it.copy(thresholdSats = clampedThreshold)
-        }
-        publishThresholdPreview()
-    }
-
-    fun persistAutoPaySettings() {
-        val state = mutableUiState.value
         scope.launch {
-            paymentPreferences.setConfirmationMode(state.confirmationMode)
-            paymentPreferences.setConfirmationThreshold(state.thresholdSats)
+            paymentPreferences.setConfirmationThreshold(clampedThreshold)
         }
     }
 

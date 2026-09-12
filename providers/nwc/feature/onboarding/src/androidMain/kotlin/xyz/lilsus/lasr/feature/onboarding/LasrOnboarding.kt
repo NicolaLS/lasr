@@ -118,7 +118,6 @@ fun NavGraphBuilder.lasrOnboarding(
             onConfirmationModeChanged = onboardingViewModel::setConfirmationMode,
             onThresholdChanged = onboardingViewModel::setThreshold,
             onContinue = {
-                onboardingViewModel.persistAutoPaySettings()
                 navController.navigate(LasrOnboardingDestination.Agreement)
             },
             onBack = navController::navigateUp

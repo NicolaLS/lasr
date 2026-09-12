@@ -68,6 +68,11 @@ struct ContentView: View {
                 actionTitle: snapshot.text["get_started"] ?? "",
                 action: { RaylIosApp.shared.completeWelcome() }
             )
+        } else if snapshot.availableWallets.count == 1 {
+            ProgressView()
+                .task {
+                    RaylIosApp.shared.choose(wallet: snapshot.availableWallets[0])
+                }
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {

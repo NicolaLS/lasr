@@ -114,12 +114,8 @@ internal class BlipRuntime(
     }
     val onboardingViewModel by onboardingViewModelDelegate
 
-    val onboardingCompleted: Boolean get() = appSettings.getBoolean("onboarding.completed", false)
+    val onboardingState = BlinkOnboardingState(appSettings, configuration.welcomeCompleted)
     val canConnect: Boolean get() = !closed && !mutableRemovalPending.value && !mutableRemoved.value
-
-    fun completeOnboarding() {
-        appSettings.putBoolean("onboarding.completed", true)
-    }
 
     init {
         if (!recoveryFailed && !recoveredRemoval) start()
@@ -127,7 +123,6 @@ internal class BlipRuntime(
 
     private fun start() {
         runtimeStarted = true
-        if (blinkWallet.connection.value != null) completeOnboarding()
         var wasConnected = blinkWallet.connection.value != null
         mutableConnected.value = wasConnected
         scope.launch {
@@ -142,7 +137,9 @@ internal class BlipRuntime(
         }
         scope.launch {
             PaymentDeepLinkEvents.events.collect { uri ->
-                if (!canConnect || storageReset.pending || blinkWallet.connection.value == null) {
+                if (!canConnect || storageReset.pending ||
+                    !onboardingState.canEnterApp(blinkWallet.connection.value != null)
+                ) {
                     return@collect
                 }
                 tabState.requestScan()
