@@ -29,5 +29,8 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+        androidHostTest.dependencies {
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }
