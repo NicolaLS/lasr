@@ -250,7 +250,6 @@ class LasrNativeOnboardingController internal constructor(private val runtime: L
     }
 
     fun continueAutoPay() {
-        runtime.onboardingViewModel.persistAutoPaySettings()
         moveTo(STEP_AGREEMENT)
     }
 

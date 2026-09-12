@@ -56,10 +56,12 @@ fun OnboardingScaffold(
                     Spacer(modifier = Modifier.size(48.dp))
                 }
 
-                StepIndicator(
-                    stepIndex = stepIndex,
-                    totalSteps = totalSteps
-                )
+                if (totalSteps > 0) {
+                    StepIndicator(
+                        stepIndex = stepIndex,
+                        totalSteps = totalSteps
+                    )
+                }
 
                 Spacer(modifier = Modifier.size(48.dp))
             }

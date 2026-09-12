@@ -52,7 +52,7 @@ fun FeaturesScreen(
     onPageChanged: (Int) -> Unit,
     onContinue: () -> Unit,
     onRequestCameraPermission: () -> Unit = {},
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     require(pages.isNotEmpty()) { "Onboarding requires at least one feature page" }
@@ -96,7 +96,8 @@ fun FeaturesScreen(
     OnboardingScaffold(
         stepIndex = stepIndex,
         totalSteps = totalSteps,
-        onBack = onBack
+        showBackButton = onBack != null,
+        onBack = { onBack?.invoke() }
     ) {
         Column(
             modifier =

@@ -10,4 +10,5 @@
     <string name="add_blink_wallet_connection_notice">Beim Verbinden wird dein API-Schlüssel an Blink gesendet und deine Blink-Kontakte (Namen und Lightning-Adressen) werden auf dieses Gerät importiert. Mit dem Verbinden akzeptierst du die Nutzungsbedingungen.</string>
     <string name="add_blink_wallet_privacy">Datenschutzerklärung</string>
     <string name="add_blink_wallet_terms">Nutzungsbedingungen</string>
+    <string name="add_blink_wallet_instructions">So erhältst du einen API-Schlüssel</string>
 </resources>

@@ -44,8 +44,6 @@ import xyz.lilsus.raylsuite.feature.onboarding.OnboardingTestTags
 
 @Composable
 fun BlinkWalletInstructionsScreen(
-    stepIndex: Int,
-    totalSteps: Int,
     onConnectWallet: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -56,8 +54,8 @@ fun BlinkWalletInstructionsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     OnboardingScaffold(
-        stepIndex = stepIndex,
-        totalSteps = totalSteps,
+        stepIndex = 0,
+        totalSteps = 0,
         onBack = onBack
     ) {
         Column(

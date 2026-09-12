@@ -6,6 +6,7 @@ import xyz.lilsus.raylsuite.core.ui.resources.nativeString
 data class NativeBlinkWalletConnectionText(
     val title: String,
     val description: String,
+    val instructions: String,
     val connectionNotice: String,
     val privacy: String,
     val terms: String,
@@ -28,6 +29,12 @@ suspend fun nativeBlinkWalletConnectionText(appName: String): NativeBlinkWalletC
                 key = "add_blink_wallet_description"
             ),
             appName
+        ),
+        instructions = nativeString(
+            NativeStringResource(
+                table = "BlipWalletConnection",
+                key = "add_blink_wallet_instructions"
+            )
         ),
         connectionNotice = nativeString(
             NativeStringResource(

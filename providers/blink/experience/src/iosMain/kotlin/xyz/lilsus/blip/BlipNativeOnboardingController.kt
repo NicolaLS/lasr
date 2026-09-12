@@ -6,11 +6,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import xyz.lilsus.blip.feature.onboarding.BlinkOnboardingStep
 import xyz.lilsus.blip.feature.onboarding.nativeBlipInstructionProgress
 import xyz.lilsus.blip.feature.onboarding.nativeBlipOnboardingText
 import xyz.lilsus.blip.feature.walletconnection.AddBlinkWalletEvent
@@ -76,6 +76,7 @@ data class BlipNativeOnboardingSnapshot(
     val enterKeyTitle: String,
     val walletTitle: String,
     val walletDescription: String,
+    val walletInstructionsTitle: String,
     val connectionNotice: String,
     val privacyTitle: String,
     val privacyPolicyUrl: String?,
@@ -99,33 +100,31 @@ data class BlipNativeOnboardingSnapshot(
  */
 class BlipNativeOnboardingController internal constructor(
     private val onboarding: OnboardingViewModel,
-    blinkWallet: BlinkWallet,
+    private val blinkWallet: BlinkWallet,
     languageChanges: Flow<*>,
     private val appName: String,
     private val welcomeCompleted: Boolean,
     private val legalLinks: SettingsLegalLinks,
-    private val connectionOnly: Boolean,
-    private val onCompleted: () -> Unit,
-    private val canConnectWallet: () -> Boolean,
-    initiallyCompleted: Boolean
+    private val progress: BlinkOnboardingState,
+    private val canConnectWallet: () -> Boolean
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val addWallet = AddBlinkWalletViewModel(blinkWallet)
     private val clipboard = CredentialClipboard()
     private val snapshot = MutableStateFlow<BlipNativeOnboardingSnapshot?>(null)
     private val observers = mutableSetOf<(BlipNativeOnboardingSnapshot) -> Unit>()
-    private val completed = MutableStateFlow(initiallyCompleted)
-    internal val completion: StateFlow<Boolean> = completed
-    private var currentStep = when {
-        connectionOnly -> STEP_WALLET
-        welcomeCompleted -> STEP_FEATURES
-        else -> STEP_WELCOME
-    }
+    private var showingInstructions = false
     private var currentInstructionPage = 0
 
     init {
         scope.launch {
-            combine(onboarding.uiState, addWallet.uiState, languageChanges) { _, _, _ -> Unit }
+            combine(
+                onboarding.uiState,
+                addWallet.uiState,
+                languageChanges,
+                progress.step,
+                blinkWallet.connection
+            ) { _, _, _, _, _ -> Unit }
                 .collect { publishSnapshot() }
         }
         scope.launch {
@@ -134,13 +133,13 @@ class BlipNativeOnboardingController internal constructor(
                     AddBlinkWalletEvent.Success -> {
                         clipboard.clearAfterSaving()
                         clearCredentialSnapshot()
-                        finish()
+                        showingInstructions = false
                     }
 
                     AddBlinkWalletEvent.Cancelled -> {
                         clipboard.discard()
                         clearCredentialSnapshot()
-                        currentStep = STEP_INSTRUCTIONS
+                        progress.moveTo(BlinkOnboardingStep.Welcome)
                     }
                 }
                 publishSnapshot()
@@ -161,15 +160,8 @@ class BlipNativeOnboardingController internal constructor(
         }
     }
 
-    fun isCompleted(): Boolean = completed.value
-
-    fun observeCompleted(onChange: (Boolean) -> Unit): () -> Unit {
-        val job = scope.launch { completed.collect(onChange) }
-        return { job.cancel() }
-    }
-
     fun continueWelcome() {
-        moveTo(STEP_FEATURES)
+        progress.moveTo(BlinkOnboardingStep.Connect)
     }
 
     fun setFeaturePage(page: Int) {
@@ -177,7 +169,7 @@ class BlipNativeOnboardingController internal constructor(
     }
 
     fun continueFeatures() {
-        moveTo(STEP_AUTO_PAY)
+        progress.moveTo(BlinkOnboardingStep.AutoPay)
     }
 
     fun setConfirmationMode(value: String) {
@@ -195,8 +187,7 @@ class BlipNativeOnboardingController internal constructor(
     }
 
     fun continueAutoPay() {
-        onboarding.persistAutoPaySettings()
-        moveTo(STEP_AGREEMENT)
+        progress.moveTo(BlinkOnboardingStep.Agreement)
     }
 
     fun setAgreement(agreed: Boolean) {
@@ -204,7 +195,7 @@ class BlipNativeOnboardingController internal constructor(
     }
 
     fun continueAgreement() {
-        if (onboarding.uiState.value.hasAgreed) moveTo(STEP_INSTRUCTIONS)
+        if (onboarding.uiState.value.hasAgreed) progress.moveTo(BlinkOnboardingStep.Complete)
     }
 
     fun setInstructionPage(page: Int) {
@@ -213,7 +204,17 @@ class BlipNativeOnboardingController internal constructor(
     }
 
     fun showWalletConnection() {
-        moveTo(STEP_WALLET)
+        showingInstructions = false
+        refresh()
+    }
+
+    fun showWalletInstructions() {
+        if (blinkWallet.connection.value != null || addWallet.uiState.value.isSaving) return
+        addWallet.reset()
+        clipboard.discard()
+        clearCredentialSnapshot()
+        showingInstructions = true
+        refresh()
     }
 
     fun updateApiKey(apiKey: String) {
@@ -228,23 +229,16 @@ class BlipNativeOnboardingController internal constructor(
     }
 
     fun connectWallet() {
-        if (canConnectWallet()) addWallet.submit()
+        if (canConnectWallet() && blinkWallet.connection.value == null) addWallet.submit()
     }
 
     fun back() {
-        if (connectionOnly) return
-        when (currentStep) {
-            STEP_FEATURES -> moveTo(STEP_WELCOME)
-            STEP_AUTO_PAY -> moveTo(STEP_FEATURES)
-            STEP_AGREEMENT -> moveTo(STEP_AUTO_PAY)
-            STEP_INSTRUCTIONS -> moveTo(STEP_AGREEMENT)
-            STEP_WALLET -> addWallet.cancel()
+        when (currentStep()) {
+            STEP_AUTO_PAY -> progress.moveTo(BlinkOnboardingStep.Features)
+            STEP_AGREEMENT -> progress.moveTo(BlinkOnboardingStep.AutoPay)
+            STEP_INSTRUCTIONS -> showWalletConnection()
+            STEP_WALLET -> if (canReturnToWelcome()) addWallet.cancel()
         }
-    }
-
-    fun finish() {
-        onCompleted()
-        completed.value = true
     }
 
     fun clear() {
@@ -267,10 +261,19 @@ class BlipNativeOnboardingController internal constructor(
         observers.toList().forEach { it(cleared) }
     }
 
-    private fun moveTo(step: String) {
-        currentStep = step
-        refresh()
+    private fun currentStep(): String = when (
+        progress.step.value.destination(blinkWallet.connection.value != null)
+    ) {
+        BlinkOnboardingStep.Welcome -> STEP_WELCOME
+        BlinkOnboardingStep.Connect -> if (showingInstructions) STEP_INSTRUCTIONS else STEP_WALLET
+        BlinkOnboardingStep.Features -> STEP_FEATURES
+        BlinkOnboardingStep.AutoPay -> STEP_AUTO_PAY
+        BlinkOnboardingStep.Agreement -> STEP_AGREEMENT
+        BlinkOnboardingStep.Complete -> "complete"
     }
+
+    private fun canReturnToWelcome(): Boolean =
+        !welcomeCompleted && progress.step.value == BlinkOnboardingStep.Connect
 
     private fun refresh() {
         scope.launch { publishSnapshot() }
@@ -301,11 +304,13 @@ class BlipNativeOnboardingController internal constructor(
                     imageName = page.imageName
                 )
             }
+        val currentStep = currentStep()
         snapshot.value =
             BlipNativeOnboardingSnapshot(
                 step = currentStep,
-                canGoBack = !connectionOnly && currentStep != STEP_WELCOME &&
-                    !(welcomeCompleted && currentStep == STEP_FEATURES),
+                canGoBack = currentStep == STEP_AUTO_PAY || currentStep == STEP_AGREEMENT ||
+                    currentStep == STEP_INSTRUCTIONS ||
+                    (currentStep == STEP_WALLET && canReturnToWelcome()),
                 stepIndex = stepIndex(currentStep),
                 stepCount = ONBOARDING_STEP_COUNT,
                 backTitle = common.back,
@@ -360,6 +365,7 @@ class BlipNativeOnboardingController internal constructor(
                 enterKeyTitle = blip.enterKeyButton,
                 walletTitle = wallet.title,
                 walletDescription = wallet.description,
+                walletInstructionsTitle = wallet.instructions,
                 connectionNotice = wallet.connectionNotice,
                 privacyTitle = wallet.privacy,
                 privacyPolicyUrl = legalLinks.privacyPolicyUrl,
@@ -372,18 +378,19 @@ class BlipNativeOnboardingController internal constructor(
                 pasteTitle = wallet.paste,
                 connectTitle = wallet.connect,
                 apiKey = walletState.apiKey,
-                canConnect = walletState.canSubmit && canConnectWallet(),
+                canConnect =
+                    walletState.canSubmit && canConnectWallet() &&
+                        blinkWallet.connection.value == null,
                 isConnecting = walletState.isSaving,
                 connectionError = walletState.error?.let { nativeBlinkErrorMessageFor(it) }
             )
     }
 
     private fun stepIndex(step: String): Int = when (step) {
-        STEP_WELCOME -> 0
         STEP_FEATURES -> 1
         STEP_AUTO_PAY -> 2
         STEP_AGREEMENT -> 3
-        else -> 4
+        else -> 0
     }
 
     private companion object {
@@ -395,7 +402,7 @@ class BlipNativeOnboardingController internal constructor(
         const val STEP_WALLET = "wallet"
         const val CONFIRMATION_ALWAYS = "always"
         const val CONFIRMATION_ABOVE = "above"
-        const val ONBOARDING_STEP_COUNT = 5
+        const val ONBOARDING_STEP_COUNT = 4
         const val INSTRUCTION_PAGE_COUNT = 4
         const val BLINK_DASHBOARD_URL = "https://dashboard.blink.sv/api-keys"
     }

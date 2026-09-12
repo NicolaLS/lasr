@@ -29,9 +29,12 @@ enforces these boundaries.
 
 ## Onboarding and navigation
 
-First use is welcome → wallet choice → provider setup → Scan. A connection is
-required before showing the main tabs. A connected app opens directly into its
-provider experience:
+First use in Rayl is welcome → wallet choice → provider setup → Scan. Blink
+setup connects the wallet first, then shows app information, payment preferences,
+and acknowledgement. Blip enters this setup directly after its welcome. Both a
+connection and completed onboarding are required before showing Blink's main tabs
+or accepting payment links. A fully set-up app opens directly into its provider
+experience:
 
 - Blink exposes Scan, Hub, and Settings, with session payments opened from Scan.
   It retains funding-wallet selection, automatic contact import after connection,
@@ -39,11 +42,19 @@ provider experience:
 - NWC exposes Scan, Recent, Hub, and Settings, with its own discovery, connection
   details, and reconciliation behavior.
 
-App education and preference setup happen once per installation. Removing a
-wallet returns Rayl to wallet choice; subsequent setup uses the selected
-provider's add/confirm controls without repeating general onboarding. Cancelling
-setup returns to wallet choice. Blip and Lasr return directly to their own
-provider setup. Saved payment defaults remain visible in Settings.
+Rayl and Blip save their current Blink onboarding stage independently of the wallet
+connection. Restarting after connecting resumes the unfinished information or
+configuration step; it does not require another key or mark onboarding complete.
+Payment preference changes are saved as they are made. Draft credentials remain
+transient until validated and saved by the connection flow.
+
+App education and acknowledgement happen once per installation. Removing a
+wallet preserves completed onboarding and general preferences. Rayl returns to
+wallet choice, while Blip and Lasr return directly to their own provider setup.
+Blink's connection screen always offers its dashboard instructions,
+including when reconnecting. Once connected again, completed users enter Scan
+without repeating education or configuration. Blink's camera permission and
+recovery belong to Scan and do not affect onboarding completion.
 
 Contacts and Payment Hub widgets are local app features. The native widget
 gallery offers Contacts in single, row, and card variants, a single configured

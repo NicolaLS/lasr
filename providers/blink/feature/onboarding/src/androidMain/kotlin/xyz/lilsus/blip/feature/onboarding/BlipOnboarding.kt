@@ -1,25 +1,24 @@
 package xyz.lilsus.blip.feature.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavController
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.serialization.Serializable
-import xyz.lilsus.blip.feature.onboarding.R
 import xyz.lilsus.blip.feature.walletconnection.AddBlinkWalletEvent
 import xyz.lilsus.blip.feature.walletconnection.AddBlinkWalletScreen
 import xyz.lilsus.blip.feature.walletconnection.AddBlinkWalletViewModel
 import xyz.lilsus.blip.integration.blink.BlinkWallet
-import xyz.lilsus.raylsuite.core.camera.rememberCameraPermissionState
 import xyz.lilsus.raylsuite.core.ui.format.rememberAmountFormatter
-import xyz.lilsus.raylsuite.core.ui.platform.rememberCredentialClipboard
+import xyz.lilsus.raylsuite.core.ui.platform.CredentialClipboard
 import xyz.lilsus.raylsuite.feature.onboarding.AgreementScreen
 import xyz.lilsus.raylsuite.feature.onboarding.AutoPaySettingsScreen
 import xyz.lilsus.raylsuite.feature.onboarding.FeaturesScreen
@@ -27,124 +26,89 @@ import xyz.lilsus.raylsuite.feature.onboarding.OnboardingFeaturePage
 import xyz.lilsus.raylsuite.feature.onboarding.OnboardingViewModel
 import xyz.lilsus.raylsuite.feature.onboarding.WelcomeScreen
 
-@Serializable
-sealed interface BlipOnboardingDestination {
-    @Serializable
-    data object Welcome : BlipOnboardingDestination
-
-    @Serializable
-    data object Features : BlipOnboardingDestination
-
-    @Serializable
-    data object AutoPay : BlipOnboardingDestination
-
-    @Serializable
-    data object Agreement : BlipOnboardingDestination
-
-    @Serializable
-    data object WalletInstructions : BlipOnboardingDestination
-
-    @Serializable
-    data object AddWallet : BlipOnboardingDestination
-}
-
-fun NavGraphBuilder.blipOnboarding(
-    navController: NavController,
+@Composable
+fun BlipOnboarding(
+    step: BlinkOnboardingStep,
     blinkWallet: BlinkWallet,
     onboardingViewModel: OnboardingViewModel,
-    connectionOnly: Boolean,
     privacyPolicyUrl: String?,
     termsUrl: String?,
-    onFinished: () -> Unit
+    onStepChanged: (BlinkOnboardingStep) -> Unit,
+    onBackToWelcome: (() -> Unit)?
 ) {
-    composable<BlipOnboardingDestination.Welcome> {
-        WelcomeScreen(
+    val state by onboardingViewModel.uiState.collectAsStateWithLifecycle()
+    val back: (() -> Unit)? = when (step) {
+        BlinkOnboardingStep.AutoPay -> ({ onStepChanged(BlinkOnboardingStep.Features) })
+        BlinkOnboardingStep.Agreement -> ({ onStepChanged(BlinkOnboardingStep.AutoPay) })
+        else -> null
+    }
+    BackHandler(enabled = back != null) { back?.invoke() }
+
+    when (step) {
+        BlinkOnboardingStep.Welcome -> WelcomeScreen(
             title = stringResource(
                 R.string.onboarding_welcome_title,
                 xyz.lilsus.raylsuite.core.ui.platform.LocalProductName.current
             ),
             subtitle = stringResource(R.string.onboarding_welcome_subtitle_line1),
             description = stringResource(R.string.onboarding_welcome_subtitle_line2),
-            stepIndex = OnboardingStep.Welcome.index,
+            stepIndex = 0,
             totalSteps = ONBOARDING_STEP_COUNT,
-            onGetStarted = {
-                navController.navigate(BlipOnboardingDestination.Features)
-            }
+            onGetStarted = { onStepChanged(BlinkOnboardingStep.Connect) }
         )
-    }
-    composable<BlipOnboardingDestination.Features> {
-        val state by onboardingViewModel.uiState.collectAsStateWithLifecycle()
-        val cameraPermission = rememberCameraPermissionState()
-        FeaturesScreen(
+
+        BlinkOnboardingStep.Connect -> AddWalletDestination(
+            blinkWallet = blinkWallet,
+            privacyPolicyUrl = privacyPolicyUrl,
+            termsUrl = termsUrl,
+            onBack = onBackToWelcome
+        )
+
+        BlinkOnboardingStep.Features -> FeaturesScreen(
             pages = onboardingFeaturePages(),
             currentPage = state.featuresPage,
-            stepIndex = OnboardingStep.Features.index,
+            stepIndex = 1,
             totalSteps = ONBOARDING_STEP_COUNT,
             onPageChanged = onboardingViewModel::setFeaturesPage,
-            onContinue = {
-                navController.navigate(BlipOnboardingDestination.AutoPay)
-            },
-            onRequestCameraPermission = cameraPermission::request,
-            onBack = navController::navigateUp
+            onContinue = { onStepChanged(BlinkOnboardingStep.AutoPay) },
+            onBack = null
         )
-    }
-    composable<BlipOnboardingDestination.AutoPay> {
-        val state by onboardingViewModel.uiState.collectAsStateWithLifecycle()
-        val formatter = rememberAmountFormatter()
-        AutoPaySettingsScreen(
-            body = stringResource(
-                R.string.onboarding_autopay_body,
-                xyz.lilsus.raylsuite.core.ui.platform.LocalProductName.current
-            ),
-            confirmationMode = state.confirmationMode,
-            thresholdSats = state.thresholdSats,
-            currencyEquivalent = state.thresholdCurrencyEquivalent?.let(formatter::format),
-            stepIndex = OnboardingStep.AutoPay.index,
-            totalSteps = ONBOARDING_STEP_COUNT,
-            onConfirmationModeChanged = onboardingViewModel::setConfirmationMode,
-            onThresholdChanged = onboardingViewModel::setThreshold,
-            onContinue = {
-                onboardingViewModel.persistAutoPaySettings()
-                navController.navigate(BlipOnboardingDestination.Agreement)
-            },
-            onBack = navController::navigateUp
-        )
-    }
-    composable<BlipOnboardingDestination.Agreement> {
-        val state by onboardingViewModel.uiState.collectAsStateWithLifecycle()
-        AgreementScreen(
+
+        BlinkOnboardingStep.AutoPay -> {
+            val formatter = rememberAmountFormatter()
+            AutoPaySettingsScreen(
+                body = stringResource(
+                    R.string.onboarding_autopay_body,
+                    xyz.lilsus.raylsuite.core.ui.platform.LocalProductName.current
+                ),
+                confirmationMode = state.confirmationMode,
+                thresholdSats = state.thresholdSats,
+                currencyEquivalent = state.thresholdCurrencyEquivalent?.let(formatter::format),
+                stepIndex = 2,
+                totalSteps = ONBOARDING_STEP_COUNT,
+                onConfirmationModeChanged = onboardingViewModel::setConfirmationMode,
+                onThresholdChanged = onboardingViewModel::setThreshold,
+                onContinue = { onStepChanged(BlinkOnboardingStep.Agreement) },
+                onBack = { onStepChanged(BlinkOnboardingStep.Features) }
+            )
+        }
+
+        BlinkOnboardingStep.Agreement -> AgreementScreen(
             body = stringResource(
                 R.string.onboarding_agreement_body,
                 xyz.lilsus.raylsuite.core.ui.platform.LocalProductName.current
             ),
             hasAgreed = state.hasAgreed,
-            stepIndex = OnboardingStep.Agreement.index,
+            stepIndex = 3,
             totalSteps = ONBOARDING_STEP_COUNT,
             onAgreementChanged = onboardingViewModel::setAgreement,
             onContinue = {
-                navController.navigate(BlipOnboardingDestination.WalletInstructions)
+                if (state.hasAgreed) onStepChanged(BlinkOnboardingStep.Complete)
             },
-            onBack = navController::navigateUp
+            onBack = { onStepChanged(BlinkOnboardingStep.AutoPay) }
         )
-    }
-    composable<BlipOnboardingDestination.WalletInstructions> {
-        BlinkWalletInstructionsScreen(
-            stepIndex = OnboardingStep.WalletInstructions.index,
-            totalSteps = ONBOARDING_STEP_COUNT,
-            onConnectWallet = {
-                navController.navigate(BlipOnboardingDestination.AddWallet)
-            },
-            onBack = navController::navigateUp
-        )
-    }
-    composable<BlipOnboardingDestination.AddWallet> {
-        AddWalletDestination(
-            blinkWallet = blinkWallet,
-            privacyPolicyUrl = privacyPolicyUrl,
-            termsUrl = termsUrl,
-            onConnected = onFinished,
-            onBack = if (connectionOnly) null else ({ navController.navigateUp() })
-        )
+
+        BlinkOnboardingStep.Complete -> Unit
     }
 }
 
@@ -153,23 +117,26 @@ private fun AddWalletDestination(
     blinkWallet: BlinkWallet,
     privacyPolicyUrl: String?,
     termsUrl: String?,
-    onConnected: () -> Unit,
     onBack: (() -> Unit)?
 ) {
     val viewModel = remember(blinkWallet) { AddBlinkWalletViewModel(blinkWallet) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val clipboard = rememberCredentialClipboard()
+    val context = LocalContext.current.applicationContext
+    val clipboard = remember(context, blinkWallet) { CredentialClipboard(context) }
+    var showInstructions by rememberSaveable { mutableStateOf(false) }
 
-    DisposableEffect(viewModel) {
-        onDispose(viewModel::clear)
+    DisposableEffect(viewModel, clipboard) {
+        onDispose {
+            // Connection state can advance the screen before Success is collected.
+            if (blinkWallet.connection.value != null) clipboard.clearAfterSaving()
+            clipboard.close()
+            viewModel.clear()
+        }
     }
     LaunchedEffect(viewModel) {
         viewModel.events.collectLatest { event ->
             when (event) {
-                AddBlinkWalletEvent.Success -> {
-                    clipboard.clearAfterSaving()
-                    onConnected()
-                }
+                AddBlinkWalletEvent.Success -> clipboard.clearAfterSaving()
 
                 AddBlinkWalletEvent.Cancelled -> {
                     clipboard.discard()
@@ -178,21 +145,36 @@ private fun AddWalletDestination(
             }
         }
     }
+    BackHandler(enabled = showInstructions || onBack != null) {
+        if (showInstructions) showInstructions = false else viewModel.cancel()
+    }
 
-    AddBlinkWalletScreen(
-        state = state,
-        privacyPolicyUrl = privacyPolicyUrl,
-        termsUrl = termsUrl,
-        onBack = onBack?.let { viewModel::cancel },
-        onApiKeyChange = {
-            clipboard.retainFor(it)
-            viewModel.updateApiKey(it)
-        },
-        onPaste = {
-            clipboard.read()?.trim()?.takeIf(String::isNotEmpty)?.let(viewModel::updateApiKey)
-        },
-        onSubmit = viewModel::submit
-    )
+    if (showInstructions) {
+        BlinkWalletInstructionsScreen(
+            onConnectWallet = { showInstructions = false },
+            onBack = { showInstructions = false }
+        )
+    } else {
+        AddBlinkWalletScreen(
+            state = state,
+            privacyPolicyUrl = privacyPolicyUrl,
+            termsUrl = termsUrl,
+            onBack = onBack?.let { viewModel::cancel },
+            onShowInstructions = {
+                viewModel.reset()
+                clipboard.discard()
+                showInstructions = true
+            },
+            onApiKeyChange = {
+                clipboard.retainFor(it)
+                viewModel.updateApiKey(it)
+            },
+            onPaste = {
+                clipboard.read()?.trim()?.takeIf(String::isNotEmpty)?.let(viewModel::updateApiKey)
+            },
+            onSubmit = viewModel::submit
+        )
+    }
 }
 
 @Composable
@@ -226,12 +208,4 @@ private fun onboardingFeaturePages(): List<OnboardingFeaturePage> = listOf(
     )
 )
 
-private enum class OnboardingStep(val index: Int) {
-    Welcome(0),
-    Features(1),
-    AutoPay(2),
-    Agreement(3),
-    WalletInstructions(4)
-}
-
-private const val ONBOARDING_STEP_COUNT = 5
+private const val ONBOARDING_STEP_COUNT = 4
