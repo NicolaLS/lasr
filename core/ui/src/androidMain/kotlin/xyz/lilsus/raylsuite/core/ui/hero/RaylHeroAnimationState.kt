@@ -60,28 +60,28 @@ internal class RaylHeroAnimationState(
 
     fun bitOpacity(index: Int): Float = bitOpacityAnims[index].value
 
-    suspend fun animatePhase(phase: RaylHeroPhase, targetColor: Color) {
-        coroutineScope {
-            launch {
-                colorAnim.animateTo(
-                    targetColor,
-                    animationSpec = tween(durationMillis = 500, easing = EaseInOutCubic)
-                )
-            }
+    suspend fun animateColor(targetColor: Color) {
+        colorAnim.animateTo(
+            targetColor,
+            animationSpec = tween(durationMillis = 500, easing = EaseInOutCubic)
+        )
+    }
 
-            when (phase) {
-                RaylHeroPhase.Ready -> animateToActive()
-                RaylHeroPhase.Acknowledged -> animateToCompressed()
-                RaylHeroPhase.Processing -> animateToLoading()
-                RaylHeroPhase.Succeeded -> animateToResult(isSuccess = true)
-                RaylHeroPhase.Failed -> animateToResult(isSuccess = false)
-            }
+    suspend fun animatePhase(phase: RaylHeroPhase) {
+        when (phase) {
+            RaylHeroPhase.Ready -> animateToActive()
+            RaylHeroPhase.Acknowledged -> animateToCompressed()
+            RaylHeroPhase.Processing -> animateToLoading()
+            RaylHeroPhase.Succeeded -> animateToResult(isSuccess = true)
+            RaylHeroPhase.Failed -> animateToResult(isSuccess = false)
         }
     }
 
     private suspend fun animateToActive() {
+        // Idle keyframes start at the resting geometry. Finish restoring it before
+        // those tracks take ownership of the same Animatables.
+        reset()
         coroutineScope {
-            launch { reset() }
             launch { animateScanningRotation() }
             launch { animateScanningSequence() }
             launch { animateDataBits() }
@@ -148,7 +148,6 @@ internal class RaylHeroAnimationState(
     }
 
     private suspend fun reset(pop: Boolean = false, isError: Boolean = false) = coroutineScope {
-        squareScaleAnims.forEach { launch { it.stop() } }
         rotationAnim.snapTo(0f)
 
         if (!pop) {
