@@ -98,7 +98,6 @@ fun NavGraphBuilder.flintOnboarding(
             onConfirmationModeChanged = onboardingViewModel::setConfirmationMode,
             onThresholdChanged = onboardingViewModel::setThreshold,
             onContinue = {
-                onboardingViewModel.persistAutoPaySettings()
                 navController.navigate(FlintOnboardingDestination.Agreement)
             },
             onBack = navController::navigateUp

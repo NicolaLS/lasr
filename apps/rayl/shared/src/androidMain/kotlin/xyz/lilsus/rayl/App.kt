@@ -1,6 +1,7 @@
 package xyz.lilsus.rayl
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -23,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -95,7 +98,7 @@ fun App(performanceDiagnostics: PerformanceDiagnostics? = null) {
                     configuration = RAYL_BLINK,
                     performanceDiagnostics = performanceDiagnostics,
                     onRemoved = leave,
-                    onChooseWallet = leave,
+                    onChooseWallet = leave.takeIf { RAYL_AVAILABLE_WALLETS.size > 1 },
                     onConnectionChanged = {
                         if (selection.wallet.value == RaylWallet.Blink) connected = it
                     }
@@ -112,45 +115,60 @@ fun App(performanceDiagnostics: PerformanceDiagnostics? = null) {
                 )
 
                 null -> Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier.safeDrawingPadding().verticalScroll(
-                            rememberScrollState()
-                        ).padding(24.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
-                    ) {
-                        Text(
-                            stringResource(
-                                if (welcomeCompleted) {
-                                    R.string.choose_wallet
-                                } else {
-                                    R.string.welcome_title
-                                }
-                            ),
-                            style = MaterialTheme.typography.headlineLarge
-                        )
-                        Text(
-                            stringResource(
-                                if (welcomeCompleted) {
-                                    R.string.choose_body
-                                } else {
-                                    R.string.welcome_body
-                                }
+                    if (welcomeCompleted && RAYL_AVAILABLE_WALLETS.size == 1) {
+                        LaunchedEffect(selection) {
+                            selection.choose(RAYL_AVAILABLE_WALLETS.single())
+                        }
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.safeDrawingPadding().verticalScroll(
+                                rememberScrollState()
+                            ).padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (welcomeCompleted) {
+                                        R.string.choose_wallet
+                                    } else {
+                                        R.string.welcome_title
+                                    }
+                                ),
+                                style = MaterialTheme.typography.headlineLarge
                             )
-                        )
-                        if (!welcomeCompleted) {
-                            Button(
-                                onClick = selection::completeWelcome,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(R.string.get_started))
-                            }
-                        } else {
-                            RAYL_AVAILABLE_WALLETS.forEach { available ->
-                                val (title, body) = when (available) {
-                                    RaylWallet.Blink -> R.string.blink_title to R.string.blink_body
-                                    RaylWallet.Nwc -> R.string.nwc_title to R.string.nwc_body
+                            Text(
+                                stringResource(
+                                    if (welcomeCompleted) {
+                                        R.string.choose_body
+                                    } else {
+                                        R.string.welcome_body
+                                    }
+                                )
+                            )
+                            if (!welcomeCompleted) {
+                                Button(
+                                    onClick = selection::completeWelcome,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(R.string.get_started))
                                 }
-                                WalletChoice(title, body) { selection.choose(available) }
+                            } else {
+                                RAYL_AVAILABLE_WALLETS.forEach { available ->
+                                    val (title, body) = when (available) {
+                                        RaylWallet.Blink ->
+                                            R.string.blink_title to
+                                                R.string.blink_body
+
+                                        RaylWallet.Nwc -> R.string.nwc_title to R.string.nwc_body
+                                    }
+                                    WalletChoice(title, body) { selection.choose(available) }
+                                }
                             }
                         }
                     }

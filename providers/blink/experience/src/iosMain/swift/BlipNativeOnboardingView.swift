@@ -1,4 +1,3 @@
-import AVFoundation
 import Shared
 import SwiftUI
 import UIKit
@@ -74,7 +73,7 @@ struct BlipNativeOnboardingView: View {
                 stepCount: snapshot.stepCount,
                 actionTitle: snapshot.featuresNextTitle,
                 onPageChanged: model.controller.setFeaturePage,
-                action: requestCameraPermissionThenContinue
+                action: model.controller.continueFeatures
             )
         case "autoPay":
             NativeOnboardingAutoPayView(
@@ -117,8 +116,8 @@ struct BlipNativeOnboardingView: View {
 
     private func instructions(_ snapshot: BlipNativeOnboardingSnapshot) -> some View {
         NativeOnboardingProgressLayout(
-            stepIndex: snapshot.stepIndex,
-            stepCount: snapshot.stepCount
+            stepIndex: 0,
+            stepCount: 0
         ) {
             VStack(spacing: 10) {
                 Text(snapshot.instructionsTitle)
@@ -229,6 +228,12 @@ struct BlipNativeOnboardingView: View {
                     .font(.largeTitle.bold())
                 Text(snapshot.walletDescription)
                     .foregroundStyle(.secondary)
+
+                Button(
+                    snapshot.walletInstructionsTitle,
+                    action: model.controller.showWalletInstructions
+                )
+                .disabled(snapshot.isConnecting)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(snapshot.connectionNotice)
@@ -361,18 +366,6 @@ struct BlipNativeOnboardingView: View {
                 subtitle: page.subtitle,
                 body: page.body
             )
-        }
-    }
-
-    private func requestCameraPermissionThenContinue() {
-        guard AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined else {
-            model.controller.continueFeatures()
-            return
-        }
-        AVCaptureDevice.requestAccess(for: .video) { _ in
-            DispatchQueue.main.async {
-                model.controller.continueFeatures()
-            }
         }
     }
 }

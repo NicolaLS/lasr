@@ -97,25 +97,23 @@ class BlinkIosExperience(private val configuration: BlinkExperienceConfiguration
             appName = configuration.appName,
             welcomeCompleted = configuration.welcomeCompleted,
             legalLinks = configuration.legalLinks,
-            connectionOnly = runtime.onboardingCompleted,
-            onCompleted = runtime::completeOnboarding,
-            canConnectWallet = { runtime.canConnect },
-            initiallyCompleted = runtime.blinkWallet.connection.value != null
+            progress = runtime.onboardingState,
+            canConnectWallet = { runtime.canConnect }
         )
     }
     private val nativeOnboardingController by nativeOnboardingControllerDelegate
 
-    /** Connected users enter immediately; contact import runs in the shared runtime. */
+    /** Connection and app education have independent lifetimes. */
     fun isOnboarded(): Boolean =
-        !runtime.removalPending.value && isConnected() && nativeOnboardingController.isCompleted()
+        !runtime.removalPending.value && runtime.onboardingState.canEnterApp(isConnected())
 
     fun observeOnboarded(onChange: (Boolean) -> Unit): () -> Unit {
         val job =
             observerScope.launch {
                 combine(
                     runtime.connected,
-                    nativeOnboardingController.completion
-                ) { connected, completed -> connected && completed }
+                    runtime.onboardingState.step
+                ) { connected, _ -> runtime.onboardingState.canEnterApp(connected) }
                     .collect(onChange)
             }
         return { job.cancel() }
